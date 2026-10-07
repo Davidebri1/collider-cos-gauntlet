@@ -1,0 +1,47 @@
+name: collider_flutter
+description: 'Collider - AAA Multi-Model AI Spatial Client with VisionOS Glass, 3D Consensus Galaxy, and Smart Gen Suite'
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+  flutter: '>=3.19.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_riverpod: ^2.5.1
+  flutter_animate: ^4.5.0
+  google_fonts: ^6.2.1
+  glassmorphism: ^3.0.0
+  matrix4_transform: ^2.0.1
+  dio: ^5.4.3+1
+  supabase_flutter: ^2.5.6
+  shared_preferences: ^2.2.3
+  intl: ^0.19.0
+  uuid: ^4.4.0
+  webview_flutter: ^4.7.0
+  file_picker: ^10.3.0
+  webview_flutter_web: ^0.2.3+4
+  web: ^1.1.1
+  video_player: ^2.14.1
+  cached_network_image: ^3.4.1
+  in_app_purchase: ^3.2.0
+  just_audio: ^0.10.6
+  path_provider: ^2.1.6
+  open_filex: ^4.7.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  # Theme posters, live loops, and tracks are NOT bundled. They stream from
+  # https://davidebri1.github.io/collider-media/ (see lib/core/media/theme_catalog.dart).
+  # Bundled: fallback catalog JSON + one tiny offline wallpaper.
+  assets:
+    - assets/catalog/
+    - assets/wallpapers/
+    - assets/html/
