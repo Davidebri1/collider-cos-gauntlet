@@ -1,0 +1,12 @@
+*.dart text eol=lf
+*.html text eol=lf
+*.json text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
+*.webp binary
+*.mp4 binary
+*.mov binary
+*.ttf binary
+*.otf binary
+*.png binary
+*.jpg binary
