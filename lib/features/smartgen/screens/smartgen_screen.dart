@@ -77,6 +77,8 @@ class _SmartGenScreenState extends State<SmartGenScreen> {
     _store = context.read<SmartGenStore>();
     _store.addListener(_onStoreChanged);
     _store.load().then((_) {
+      // First run with nothing on it: show a working board, not an empty lane.
+      _store.seedStarterIfEmpty();
       if (mounted) setState(() => _ready = true);
     });
   }

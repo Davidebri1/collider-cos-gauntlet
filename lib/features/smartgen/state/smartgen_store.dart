@@ -174,12 +174,22 @@ class SmartGenStore extends ChangeNotifier {
       final board = SmartBoard(templateId: tpl.id, title: 'My Board');
       _boards[board.id] = board;
       _activeBoardId = board.id;
-      _seedStarterCards(board.id);
     }
     _activeBoardId ??= _boards.keys.first;
     _loaded = true;
     notifyListeners();
     await _persist();
+  }
+
+  /// Onboarding only: when the user has no cards at all, drop a few in so the
+  /// board opens on a working surface rather than an empty lane. Called by the
+  /// surface, never by [load], so a store built in a test starts clean.
+  void seedStarterIfEmpty() {
+    final boardId = _activeBoardId;
+    if (boardId == null || _cards.isNotEmpty) return;
+    _seedStarterCards(boardId);
+    notifyListeners();
+    _persist();
   }
 
   /// First run opens on a working board rather than an empty one: a handful
