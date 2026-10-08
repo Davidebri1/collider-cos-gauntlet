@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:provider/provider.dart';
 
 import 'core/theme/edge_fade.dart';
 import 'core/theme/living_stardust_overlay.dart';
@@ -29,6 +30,7 @@ import 'features/drawers/settings_drawer.dart';
 import 'features/drawers/model_ladder_drawer.dart';
 import 'features/consensus/consensus_webview.dart';
 import 'features/smartgen/screens/smartgen_screen.dart';
+import 'features/smartgen/state/smartgen_store.dart';
 import 'features/market/screens/market_screen.dart';
 import 'features/files/screens/files_screen.dart';
 import 'features/browser/browser_urls.dart';
@@ -1394,9 +1396,14 @@ class _ColliderHomeScreenState extends State<ColliderHomeScreen> {
 
           if (_activeDrawer == 'smartgen')
             // v8.4: the Keynote frame (30:75) is a stage on the whole screen.
+            // Smart Gen carries its own store, supplied here so the surface
+            // opens on the board it was last left on.
             Positioned.fill(
-              child: SmartGenScreen(
-                onClose: () => _requestSwitchSurface(null),
+              child: ChangeNotifierProvider<SmartGenStore>(
+                create: (_) => SmartGenStore(),
+                child: SmartGenScreen(
+                  onClose: () => _requestSwitchSurface(null),
+                ),
               ),
             ),
 
