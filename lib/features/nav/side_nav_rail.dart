@@ -52,7 +52,7 @@ List<SideRailEntry> sideRailEntries(ActiveWorkSurface s) => switch (s) {
           const SideRailEntry('all', Icons.folder_open_rounded, 'All Files'),
           const SideRailEntry('files', Icons.upload_file_rounded, 'Added Here'),
           const SideRailEntry('composer', Icons.attach_file_rounded, 'Attachments'),
-          const SideRailEntry('model', Icons.auto_awesome_outlined, 'Model Outputs'),
+          const SideRailEntry('model', Icons.hub_rounded, 'Model Outputs'),
           if (MusicPlayer.library.isNotEmpty) const SideRailEntry('music', Icons.library_music_rounded, 'Music'),
           const SideRailEntry('search', Icons.search_rounded, 'Search'),
         ],

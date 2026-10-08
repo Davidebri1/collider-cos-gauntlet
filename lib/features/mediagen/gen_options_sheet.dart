@@ -89,7 +89,7 @@ class _GenOptionsSheetState extends State<GenOptionsSheet> {
           _Opt('ar', Icons.crop_portrait_rounded, 'Aspect ratio', s.ar, [for (final r in sorted) (r, r)], (v) => s.ar = v),
           if (o != null && o.resolutions.isNotEmpty)
             _Opt('res', Icons.high_quality_outlined, 'Resolution', s.resolution ?? o.resolutions.first, [for (final r in o.resolutions) (r, r)], (v) => s.resolution = v),
-          _Opt('quality', Icons.auto_awesome_outlined, 'Quality', _q(s.quality), const [('standard', 'Standard'), ('hd', 'HD'), ('ultra', 'Ultra')], (v) => s.quality = v,
+          _Opt('quality', Icons.tune_rounded, 'Quality', _q(s.quality), const [('standard', 'Standard'), ('hd', 'HD'), ('ultra', 'Ultra')], (v) => s.quality = v,
               (v) => GenFlags(task: s.task, ar: s.ar, quality: v, count: 1)),
           _Opt('style', Icons.palette_outlined, 'Style', _style(s.style), const [('neutral', 'Neutral'), ('photorealistic', 'Realistic'), ('3d-render', '3D Render'), ('anime', 'Anime'), ('cyberpunk', 'Cyberpunk')], (v) => s.style = v),
         ];

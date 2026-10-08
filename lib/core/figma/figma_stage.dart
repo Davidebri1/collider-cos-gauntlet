@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
@@ -21,6 +22,8 @@ class FigmaStage extends StatelessWidget {
     required this.center,
     required this.children,
     this.clip = true,
+    this.contentSize,
+    this.contentCenter,
   });
 
   /// The Figma frame's size (for the layout box of the children).
@@ -33,6 +36,18 @@ class FigmaStage extends StatelessWidget {
   final Offset center;
   final List<Widget> children;
   final bool clip;
+
+  /// The part of the frame the screen must actually be able to show, and its
+  /// centre in frame coordinates.
+  ///
+  /// Left null, the stage fills the device width with [cropWidth] frame px,
+  /// which is right for a phone-shaped screen. Set them and the stage instead
+  /// scales to FIT this rect (contain), so a short, wide screen shrinks the
+  /// frame to show all of its content rather than cropping the middle band out
+  /// of it. A 1280x800 desktop window is the case that needs this: filling the
+  /// width there leaves only ~450 of the frame's 900 visible rows.
+  final Size? contentSize;
+  final Offset? contentCenter;
 
   static double scaleFor(Size screen, double cropWidth) => screen.width / cropWidth;
 
@@ -47,9 +62,15 @@ class FigmaStage extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return LayoutBuilder(builder: (context, c) {
-      final s = c.maxWidth / cropWidth;
-      final ox = center.dx - cropWidth / 2;
-      final oy = center.dy - c.maxHeight / s / 2;
+      double s = c.maxWidth / cropWidth;
+      var focus = center;
+      final content = contentSize;
+      if (content != null && contentCenter != null && content.width > 0 && content.height > 0) {
+        s = math.min(c.maxWidth / content.width, c.maxHeight / content.height);
+        focus = contentCenter!;
+      }
+      final ox = focus.dx - c.maxWidth / s / 2;
+      final oy = focus.dy - c.maxHeight / s / 2;
       final m = Matrix4.identity()
         ..scale(s, s, 1)
         ..translate(-ox, -oy);

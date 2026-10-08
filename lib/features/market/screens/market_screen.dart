@@ -269,7 +269,7 @@ class _MarketScreenState extends State<MarketScreen> {
               Row(children: [
                 _pillButton('Open', Icons.play_arrow_rounded, () => setState(() => _open = featured), width: 182),
                 const SizedBox(width: 10),
-                _pillButton('Remix', Icons.auto_awesome_rounded, () => _remix(featured), fillA: 0.02),
+                _pillButton('Remix', Icons.tune_rounded, () => _remix(featured), fillA: 0.02),
               ]),
             ]),
           ),
@@ -365,7 +365,7 @@ class _MarketScreenState extends State<MarketScreen> {
               radius: VRadius.full,
               padding: const EdgeInsets.all(4),
               child: Row(mainAxisSize: MainAxisSize.min, children: [
-                VCircleButton(icon: Icons.auto_awesome_rounded, size: 44, tooltip: 'Remix', onTap: () => _remix(t)),
+                VCircleButton(icon: Icons.tune_rounded, size: 44, tooltip: 'Remix', onTap: () => _remix(t)),
                 VCircleButton(icon: Icons.close_rounded, size: 44, tooltip: 'Close', onTap: () => setState(() => _open = null)),
               ]),
             ),

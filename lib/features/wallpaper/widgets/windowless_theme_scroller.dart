@@ -38,9 +38,14 @@ class WindowlessThemeScroller extends StatefulWidget {
   State<WindowlessThemeScroller> createState() => _WindowlessThemeScrollerState();
 }
 
+/// Which shelf the gallery is showing. Free themes apply directly; premium
+/// packs only appear here once the store says they are yours.
+enum ThemeShelf { free, premium }
+
 class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
   late WallpaperTheme _previewed;
   bool _expanded = false;
+  ThemeShelf _shelf = ThemeShelf.free;
 
   static const _shadow = [Shadow(color: Color(0x99000000), blurRadius: 16)];
 
@@ -48,32 +53,57 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
   void initState() {
     super.initState();
     _previewed = widget.currentTheme;
+    // Open on the shelf that actually holds the current wallpaper, so the
+    // strip never starts on an empty list.
+    _shelf = _premiumShelf.any((x) => x.id == widget.currentTheme.id)
+        ? ThemeShelf.premium
+        : ThemeShelf.free;
     ThemePackStore.instance.init();
   }
 
+  List<WallpaperTheme> get _freeShelf => WallpaperCatalog.freeThemes;
+
+  /// Every premium pack is browsable here. Ownership is the market's call,
+  /// not the gallery's: hiding the packs until the store is open left this
+  /// shelf empty and the strip with nothing to show.
+  List<WallpaperTheme> get _premiumShelf => WallpaperCatalog.premiumThemes;
+
+  /// Browsing never touches the applied wallpaper. The preview moves inside
+  /// the gallery; the room behind it and the app's own background stay on the
+  /// wallpaper that is actually set until Set Wallpaper is pressed.
   void _select(WallpaperTheme t) {
+    if (t.id == _previewed.id) return;
     setState(() => _previewed = t);
-    widget.onLivePreview(t);
   }
 
-  List<WallpaperTheme> get _themes {
-    final store = ThemePackStore.instance;
-    return [
-      ...WallpaperCatalog.freeThemes,
-      for (final t in WallpaperCatalog.premiumThemes)
-        if (store.storeOpen && store.isUnlocked(t.id)) t,
-    ];
+  void _setShelf(ThemeShelf s) {
+    if (_shelf == s) return;
+    final list = s == ThemeShelf.free ? _freeShelf : _premiumShelf;
+    setState(() {
+      _shelf = s;
+      // Keep the selection inside the shelf the user just switched to.
+      if (!list.any((x) => x.id == _previewed.id)) {
+        if (list.isNotEmpty) _previewed = list.first;
+      }
+    });
   }
+
+  List<WallpaperTheme> get _themes => _shelf == ThemeShelf.free ? _freeShelf : _premiumShelf;
 
   /// 2670_group: the selected theme 86 x 86 at x 921.6, five 50 x 86
   /// neighbours each side 60 apart (614.6 .. 904.6 / 1024.6 .. 1314.6),
   /// fading toward the ends.
   List<Widget> _strip(List<WallpaperTheme> themes) {
-    final sel = themes.indexWhere((t) => t.id == _previewed.id);
+    if (themes.isEmpty) return const [];
+    // A preview that is not on this shelf (the shelf just switched, or the
+    // catalog changed under us) must still draw a strip: fall back to the
+    // head of the list instead of rendering nothing at all.
+    var sel = themes.indexWhere((t) => t.id == _previewed.id);
+    if (sel < 0) sel = 0;
     final out = <Widget>[];
     for (var k = -5; k <= 5; k++) {
       final i = sel + k;
-      if (sel < 0 || i < 0 || i >= themes.length) continue;
+      if (i < 0 || i >= themes.length) continue;
       final t = themes[i];
       final left = k == 0 ? 921.6 : (k < 0 ? 904.6 - 50 - (-k - 1) * 60 : 1024.6 + (k - 1) * 60);
       final w = k == 0 ? 86.0 : 50.0;
@@ -99,7 +129,15 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
               opacity: fade,
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(10),
-                child: ThemePosterImage(theme: t, fit: BoxFit.cover, filterQuality: FilterQuality.medium),
+                child: Stack(
+                  fit: StackFit.expand,
+                  children: [
+                    // Backing so a theme whose poster is still loading, or
+                    // missing, still reads as a tile instead of a hole.
+                    const ColoredBox(color: Color(0x33FFFFFF)),
+                    ThemePosterImage(theme: t, fit: BoxFit.cover, filterQuality: FilterQuality.medium),
+                  ],
+                ),
               ),
             ),
           ),
@@ -125,21 +163,23 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
             fit: StackFit.expand,
             children: [
               // The room, blurred (Figma: the environment behind the window).
+              // It tracks the wallpaper that is actually applied, not the theme
+              // being browsed: looking around must not repaint the room.
               Positioned.fill(
                 child: AnimatedSwitcher(
                   duration: VMotion.base,
                   child: KeyedSubtree(
-                    key: ValueKey('room-${_previewed.id}-$_expanded'),
+                    key: ValueKey('room-${widget.currentTheme.id}-$_expanded'),
                     child: _expanded
                         ? GestureDetector(
                             onTap: () => setState(() => _expanded = false),
-                            child: ThemePosterImage(theme: _previewed, fit: BoxFit.cover, fullBleed: true),
+                            child: ThemePosterImage(theme: widget.currentTheme, fit: BoxFit.cover, fullBleed: true),
                           )
                         : ImageFiltered(
                             imageFilter: ImageFilter.blur(sigmaX: 28, sigmaY: 28, tileMode: TileMode.clamp),
                             child: ColorFiltered(
                               colorFilter: const ColorFilter.mode(Color(0x55000000), BlendMode.darken),
-                              child: ThemePosterImage(theme: _previewed, fit: BoxFit.cover, fullBleed: true),
+                              child: ThemePosterImage(theme: widget.currentTheme, fit: BoxFit.cover, fullBleed: true),
                             ),
                           ),
                   ),
@@ -163,6 +203,12 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                     frame: const Size(1920, 1080),
                     cropWidth: 725,
                     center: const Offset(960, 540),
+                    // Everything this screen owns: shelf switch (x 358) through the
+                    // rightmost strip tile (x 1314.6) and down to the window
+                    // controls (y 991), so any aspect ratio scales the whole
+                    // gallery down instead of cropping one edge off it.
+                    contentSize: const Size(957, 896),
+                    contentCenter: const Offset(836, 543),
                     children: [
                       Positioned(
                         left: 597.5,
@@ -175,6 +221,17 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
                           onBack: widget.onCancel,
                           onExpand: () => setState(() => _expanded = true),
                           onSet: () => widget.onConfirmTheme(_previewed),
+                        ),
+                      ),
+                      Positioned(
+                        left: 358,
+                        top: 352,
+                        width: 212,
+                        child: _ShelfSelector(
+                          shelf: _shelf,
+                          freeCount: _freeShelf.length,
+                          premiumCount: _premiumShelf.length,
+                          onChanged: _setShelf,
                         ),
                       ),
                       ..._strip(themes),
@@ -215,6 +272,80 @@ class _WindowlessThemeScrollerState extends State<WindowlessThemeScroller> {
           ),
         );
       },
+    );
+  }
+}
+
+/// The floating shelf switch: Free Themes with Premium Themes just below it.
+///
+/// The group dissolves into the room above and below rather than sitting on a
+/// hard edge, and the shelf you are not looking at recedes instead of
+/// disappearing, so the switch reads as one object with two ends.
+class _ShelfSelector extends StatelessWidget {
+  final ThemeShelf shelf;
+  final int freeCount;
+  final int premiumCount;
+  final ValueChanged<ThemeShelf> onChanged;
+
+  const _ShelfSelector({
+    required this.shelf,
+    required this.freeCount,
+    required this.premiumCount,
+    required this.onChanged,
+  });
+
+  Widget _pill(ThemeShelf s, String label, int count) {
+    final active = shelf == s;
+    return Semantics(
+      button: true,
+      selected: active,
+      label: '$label, $count themes',
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => onChanged(s),
+        child: AnimatedOpacity(
+          duration: VMotion.base,
+          curve: Curves.easeOutCubic,
+          opacity: active ? 1.0 : 0.46,
+          child: AnimatedContainer(
+            duration: VMotion.base,
+            curve: Curves.easeOutCubic,
+            height: 46,
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(VRadius.full),
+              color: active ? const Color(0x4DFFFFFF) : const Color(0x26FFFFFF),
+              border: Border.all(
+                color: active ? const Color(0x66FFFFFF) : const Color(0x1FFFFFFF),
+                width: 1,
+              ),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                FText(label, size: 15, height: 20, weight: active ? FontWeight.w700 : FontWeight.w500),
+                FText('$count', size: 13, height: 18, weight: FontWeight.w600, opacity: active ? 0.72 : 0.5),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return EdgeFade(
+      fadeHeight: 22,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _pill(ThemeShelf.free, 'Free Themes', freeCount),
+          const SizedBox(height: 10),
+          _pill(ThemeShelf.premium, 'Premium Themes', premiumCount),
+        ],
+      ),
     );
   }
 }
