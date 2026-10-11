@@ -2,3 +2,7 @@
 build/
 .flutter-plugins
 .flutter-plugins-dependencies
+"worktrees/"  
+"gauntlet/roster.local.json"  
+worktrees/ 
+gauntlet/roster.local.json

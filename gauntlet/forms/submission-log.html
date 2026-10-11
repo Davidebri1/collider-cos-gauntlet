@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><script src="gauntlet-data.js"></script></head>
+<body>
+<script>
+"use strict";
+const main = shell("Submission Log", "Log every submission per round. Submissions are reviewable, not editable (§3). Branch: gauntlet/round-{n}/{nickname}.");
+
+main.innerHTML = `
+  <div class="panel">
+    <div class="row">${selRound()}${selCompetitor()}</div>
+    <div class="row">
+      <div><label>Declared intent</label><select id="intent"><option value="challenge">Challenge</option><option value="copy">Copy</option></select></div>
+      <div><label>Branch</label><input id="branch" placeholder="gauntlet/round-1/vort-lance"></div>
+    </div>
+    <label>Submission URL / location (optional)</label>
+    <input id="url" placeholder="https://github.com/Davidebri1/collider-cos-gauntlet/tree/...">
+    <label>Notes</label>
+    <textarea id="notes" placeholder="What was built, known deviations, anything the judges should look at."></textarea>
+    <div style="margin-top:12px"><button id="save">Log Submission</button></div>
+  </div>
+  <h2>Submissions this round</h2>
+  <div class="panel" id="list"></div>
+  <div style="display:flex;gap:8px"><button class="ghost" id="expall">Export round submissions JSON</button></div>
+`;
+
+function renderList() {
+  const r = getRound();
+  const subs = allEntries(`g:r${r}:sub:`);
+  document.getElementById("list").innerHTML = subs.length === 0
+    ? `<span class="muted">No submissions logged for round ${r}.</span>`
+    : `<table><tr><th>Competitor</th><th>Intent</th><th>Branch</th><th>Notes</th><th></th></tr>${
+        subs.sort((a, b) => a.competitor - b.competitor).map(s => `
+          <tr><td><b>${compLabel(s.competitor)}</b></td>
+          <td><span class="tag ${s.intent === "copy" ? "t-copy" : "t-challenge"}">${s.intent}</span></td>
+          <td class="mono">${s.branch || ""}${s.url ? `<br><a class="muted" href="${s.url}">open ↗</a>` : ""}</td>
+          <td class="muted">${s.notes || ""}</td>
+          <td><button class="ghost" data-del="${s.key}">✕</button></td></tr>`).join("")
+      }</table>`;
+  document.querySelectorAll("[data-del]").forEach(b => b.onclick = () => { deleteEntry(b.dataset.del); renderList(); });
+}
+
+document.getElementById("save").onclick = () => {
+  const r = getRound(), competitor = Number(document.getElementById("competitor").value);
+  const branch = document.getElementById("branch").value.trim();
+  saveEntry(r, "sub", "c" + competitor, {
+    round: r, competitor, intent: document.getElementById("intent").value,
+    branch: branch || `gauntlet/round-${r}/vort-lance`,
+    url: document.getElementById("url").value.trim(),
+    notes: document.getElementById("notes").value.trim(), ts: Date.now(),
+  });
+  renderList();
+};
+document.getElementById("round").onchange = renderList;
+document.getElementById("expall").onclick = () => {
+  const r = getRound();
+  downloadJSON({ round: r, kind: "submissions", entries: allEntries(`g:r${r}:sub:`) }, `round-${r}-submissions.json`);
+};
+renderList();
+</script>
+</body>
+</html>

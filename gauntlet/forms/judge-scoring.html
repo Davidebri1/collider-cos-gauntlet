@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><script src="gauntlet-data.js"></script></head>
+<body>
+<script>
+"use strict";
+const main = shell("Judge Scoring", "Binary point application with understanding-based forgiveness (§4.2). One form per judge per competitor per round.");
+
+const CH_FIELDS = [
+  ["originality", "Originality", 100],
+  ["faithfulness", "Faithfulness to functional requirements", 100],
+  ["simplicity", "Simplicity of design", 100],
+  ["elegance", "Elegance of design", 100],
+  ["innovation", "Innovation / forward thinking", 100],
+];
+const CP_FIELDS = [
+  ["faithfulness", "Faithfulness to functional requirements", 100],
+  ["process", "Simplicity of process", 100],
+  ["completeness", "Completeness of final solution", 100],
+  ["rigor", "Technical rigor (accuracy)", 100],
+];
+
+main.innerHTML = `
+  <div class="panel">
+    <div class="row">${selRound()}
+      <div><label>Judge</label><select id="judge">${JUDGES.map(j => `<option value="${j}">${j}</option>`).join("")}</select></div>
+      ${selCompetitor()}
+    </div>
+    <div><label>Submission intent (from submission log)</label><select id="intent"><option value="challenge">Challenge (max 500)</option><option value="copy">Copy (max 400, deviations compound)</option></select></div>
+    <div id="challengeBlock">
+      <h2>Challenge rubric</h2>
+      ${CH_FIELDS.map(([k, lbl]) => `<div class="row"><div><label>${lbl} (0–100)</label><input type="number" min="0" max="100" value="0" data-ch="${k}"></div></div>`).join("")}
+    </div>
+    <div id="copyBlock" style="display:none">
+      <h2>Copy rubric</h2>
+      ${CP_FIELDS.map(([k, lbl]) => `<div class="row"><div><label>${lbl} (0–100)</label><input type="number" min="0" max="100" value="0" data-cp="${k}"></div></div>`).join("")}
+      <div class="row"><div><label>Deviations counted vs Figma reference (≥4 → round score 0)</label><input type="number" min="0" max="10" value="0" id="deviations"></div>
+      <div><label>Penalty preview</label><div id="devPreview" class="score-big">0%</div></div></div>
+    </div>
+    <h2>Understanding-based forgiveness (§4.2)</h2>
+    <div class="row">
+      <div><label>Deeper understanding demonstrated?</label><select id="deeper"><option value="no">No</option><option value="yes">Yes</option></select></div>
+      <div><label>Technical faults forgiven? (only with deeper understanding)</label><select id="forgiven"><option value="no">No</option><option value="yes">Yes</option></select></div>
+    </div>
+    <label>Scoring rationale (published publicly with the score)</label>
+    <textarea id="rationale" placeholder="Specific observations. Why each point was given or withheld."></textarea>
+    <div style="margin-top:12px"><button id="save">Record Score</button> <span id="preview" class="muted" style="margin-left:12px"></span></div>
+  </div>
+  <h2>Scores recorded this round</h2>
+  <div class="panel" id="list"></div>
+  <div style="display:flex;gap:8px"><button class="ghost" id="expall">Export round judge-scores JSON</button></div>
+`;
+
+function updDevPreview() {
+  const d = Number(document.getElementById("deviations").value) || 0;
+  const p = devPenalty(d);
+  document.getElementById("devPreview").textContent = p >= 1 ? "SCORE 0" : Math.round(p * 100) + "%";
+}
+function updPreview() {
+  const intent = document.getElementById("intent").value;
+  let total = 0, max = MAX[intent];
+  if (intent === "challenge") {
+    document.querySelectorAll("[data-ch]").forEach(i => total += Number(i.value) || 0);
+  } else {
+    document.querySelectorAll("[data-cp]").forEach(i => total += Number(i.value) || 0);
+    total = Math.round(total * (1 - devPenalty(document.getElementById("deviations").value)));
+  }
+  document.getElementById("preview").textContent = `Running total: ${total} / ${max} → ${categoryOf(total / max)}`;
+}
+
+document.getElementById("intent").onchange = () => {
+  const ch = document.getElementById("intent").value === "challenge";
+  document.getElementById("challengeBlock").style.display = ch ? "" : "none";
+  document.getElementById("copyBlock").style.display = ch ? "none" : "";
+  updPreview();
+};
+document.getElementById("deviations").oninput = () => { updDevPreview(); updPreview(); };
+document.querySelectorAll("input[type=number]").forEach(i => i.oninput = updPreview);
+updDevPreview(); updPreview();
+
+document.getElementById("save").onclick = () => {
+  const r = getRound(), judge = document.getElementById("judge").value, competitor = Number(document.getElementById("competitor").value);
+  const intent = document.getElementById("intent").value;
+  const entry = {
+    round: r, judge, competitor, intent,
+    challenge: intent === "challenge" ? Object.fromEntries(CH_FIELDS.map(([k]) => [k, Number(document.querySelector(`[data-ch=${k}]`).value) || 0])) : null,
+    copy: intent === "copy" ? { ...Object.fromEntries(CP_FIELDS.map(([k]) => [k, Number(document.querySelector(`[data-cp=${k}]`).value) || 0])), deviations: Number(document.getElementById("deviations").value) || 0 } : null,
+    deeper: document.getElementById("deeper").value === "yes",
+    forgiven: document.getElementById("forgiven").value === "yes",
+    rationale: document.getElementById("rationale").value.trim(), ts: Date.now(),
+  };
+  saveEntry(r, "js", `${judge}:c${competitor}`, entry);
+  renderList();
+};
+
+function finalOf(entry) {
+  if (entry.intent === "challenge") {
+    const c = entry.challenge; return { total: c.originality + c.faithfulness + c.simplicity + c.elegance + c.innovation, max: MAX.challenge };
+  }
+  const c = entry.copy;
+  const base = c.faithfulness + c.process + c.completeness + c.rigor;
+  return { total: Math.round(base * (1 - devPenalty(c.deviations))), max: MAX.copy };
+}
+
+function renderList() {
+  const r = getRound();
+  const scores = allEntries(`g:r${r}:js:`);
+  document.getElementById("list").innerHTML = scores.length === 0
+    ? `<span class="muted">No scores recorded for round ${r}.</span>`
+    : `<table><tr><th>Competitor</th><th>Judge</th><th>Intent</th><th>Final</th><th>Category</th><th>Rationale</th><th></th></tr>${
+        scores.map(s => {
+          const f = finalOf(s);
+          return `<tr><td><b>${compLabel(s.competitor)}</b></td><td>${s.judge}</td>
+            <td><span class="tag ${s.intent === "copy" ? "t-copy" : "t-challenge"}">${s.intent}</span></td>
+            <td class="mono">${f.total} / ${f.max}</td>
+            <td><span class="tag t-${categoryOf(f.total / f.max).toLowerCase()}">${categoryOf(f.total / f.max)}</span></td>
+            <td class="muted" style="max-width:280px">${s.rationale || ""}</td>
+            <td><button class="ghost" data-del="${s.key}">✕</button></td></tr>`;
+        }).join("")
+      }</table>`;
+  document.querySelectorAll("[data-del]").forEach(b => b.onclick = () => { deleteEntry(b.dataset.del); renderList(); });
+}
+document.getElementById("round").onchange = renderList;
+document.getElementById("expall").onclick = () => {
+  const r = getRound();
+  downloadJSON({ round: r, kind: "judgeScores", entries: allEntries(`g:r${r}:js:`) }, `round-${r}-judge-scores.json`);
+};
+renderList();
+</script>
+</body>
+</html>

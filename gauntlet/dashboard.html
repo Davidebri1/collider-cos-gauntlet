@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8">
+<script src="forms/gauntlet-data.js"></script>
+<style>body { max-width: 1200px; }</style>
+</head>
+<body>
+<script>
+"use strict";
+const main = shell("Gauntlet Dashboard", "Round-by-round results, power rankings, and head-to-head outcomes. Import the JSON exports from any form to map them here.");
+
+main.innerHTML = `
+  <div class="panel">
+    <div class="row">
+      <div><label>Round view</label><select id="round">${[1,2,3,4,5,6,7,8].map(r => `<option value="${r}">Round ${r}</option>`).join("")}</select></div>
+      <div><label>Import form exports (multi-select JSON)</label><input type="file" id="import" multiple accept=".json"></div>
+      <div style="flex:0;align-self:flex-end"><button class="ghost" id="bundle">Export round bundle</button></div>
+    </div>
+  </div>
+  <div id="content"></div>
+`;
+
+document.getElementById("import").onchange = async (e) => {
+  for (const file of e.target.files) {
+    try {
+      const data = JSON.parse(await file.text());
+      const entries = Array.isArray(data) ? data : (data.entries || [data]);
+      entries.forEach(obj => {
+        const c = classifyStored(obj);
+        if (c) saveEntry(obj.round, c.kind, c.id, obj);
+      });
+    } catch (err) { alert(`Could not read ${file.name}: ${err.message}`); }
+  }
+  e.target.value = "";
+  render();
+};
+
+document.getElementById("bundle").onclick = () => {
+  const r = Number(document.getElementById("round").value);
+  downloadJSON({ round: r, generatedAt: new Date().toISOString(), ...roundEntries(r) }, `results-round-${r}.json`);
+};
+document.getElementById("round").onchange = render;
+
+function finalOf(entry) {
+  if (entry.intent === "challenge" && entry.challenge) {
+    const c = entry.challenge;
+    return { total: c.originality + c.faithfulness + c.simplicity + c.elegance + c.innovation, max: MAX.challenge };
+  }
+  if (entry.copy) {
+    const c = entry.copy;
+    const base = c.faithfulness + c.process + c.completeness + c.rigor;
+    return { total: Math.round(base * (1 - devPenalty(c.deviations))), max: MAX.copy };
+  }
+  return { total: 0, max: 100 };
+}
+
+function render() {
+  const r = Number(document.getElementById("round").value);
+  const { featureVotes, submissions, judgeScores, h2hVotes } = roundEntries(r);
+
+  // --- feature vote tally ---
+  const counts = {};
+  featureVotes.forEach(v => { counts[v.featureId] = (counts[v.featureId] || 0) + 1; });
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const task = sorted[0] ? sorted[0][0] : null;
+
+  // --- per-competitor round scores ---
+  const roundScores = {}; // competitor -> {final, max, intent, judges, category}
+  submissions.forEach(s => {
+    const js = judgeScores.filter(j => j.competitor === s.competitor);
+    if (js.length === 0) {
+      roundScores[s.competitor] = { final: null, intent: s.intent, judges: 0, category: null, branch: s.branch, url: s.url };
+      return;
+    }
+    const finals = js.map(j => finalOf(j));
+    const total = Math.round(finals.reduce((a, f) => a + f.total, 0) / finals.length);
+    const max = finals[0].max;
+    roundScores[s.competitor] = {
+      final: total, max, intent: s.intent, judges: js.length,
+      category: categoryOf(total / max), branch: s.branch, url: s.url,
+    };
+  });
+
+  // --- power rankings (cumulative through selected round) ---
+  const maxRoundSeen = Math.max(r, ...[1,2,3,4,5,6,7,8].filter(rr => allEntries(`g:r${rr}:sub:`).length > 0));
+  const cum = {}; COMPETITORS.forEach(c => cum[c.n] = []);
+  for (let rr = 1; rr <= maxRoundSeen; rr++) {
+    const subs = allEntries(`g:r${rr}:sub:`);
+    const jss = allEntries(`g:r${rr}:js:`);
+    COMPETITORS.forEach(c => {
+      const prev = cum[c.n].length ? cum[c.n][cum[c.n].length - 1] : 0;
+      const s = subs.find(x => x.competitor === c.n);
+      let add = 0;
+      if (s) {
+        const js = jss.filter(j => j.competitor === c.n);
+        if (js.length) add = Math.round(js.map(finalOf).reduce((a, f) => a + f.total, 0) / js.length);
+      }
+      cum[c.n].push(prev + add);
+    });
+  }
+  const ranked = COMPETITORS.map(c => ({ n: c.n, total: cum[c.n][cum[c.n].length - 1] || 0, prev: cum[c.n].length > 1 ? cum[c.n][cum[c.n].length - 2] : 0 }))
+    .sort((a, b) => b.total - a.total);
+
+  // --- h2h ---
+  const pairs = {};
+  h2hVotes.forEach(v => {
+    const k = [v.a, v.b].sort((x, y) => x - y).join("-");
+    pairs[k] = pairs[k] || { a: v.a, b: v.b, aVotes: 0, bVotes: 0 };
+    pairs[k][v.votedFor === v.a ? "aVotes" : "bVotes"]++;
+  });
+
+  document.getElementById("content").innerHTML = `
+    <h2>Round task ${task ? "" : "(not yet voted)"}</h2>
+    <div class="panel">${task
+      ? `<span class="tag t-challenge">${task}</span> <b>${featName(task)}</b> <span class="muted">— figma ${FEATURES.find(f => f.id === task)?.figma || ""} · ${sorted.map(([fid, c]) => `${fid}:${c}`).join(" · ")}</span>`
+      : `<span class="muted">No feature votes recorded for round ${r}. Use the Feature Vote form.</span>`}</div>
+
+    <h2>Round ${r} results</h2>
+    <div class="panel">
+      ${submissions.length === 0 ? `<span class="muted">No submissions logged. Use the Submissions form.</span>` :
+      `<table><tr><th>Competitor</th><th>Intent</th><th>Judges</th><th>Final</th><th>Category</th><th>Branch</th></tr>${
+        COMPETITORS.filter(c => roundScores[c.n]).map(c => {
+          const s = roundScores[c.n];
+          return `<tr><td><b>${compLabel(c.n)}</b></td>
+            <td><span class="tag ${s.intent === "copy" ? "t-copy" : "t-challenge"}">${s.intent}</span></td>
+            <td>${s.judges}</td>
+            <td class="mono">${s.final === null ? '<span class="muted">awaiting judgment</span>' : `${s.final} / ${s.max}`}</td>
+            <td>${s.category ? `<span class="tag t-${s.category.toLowerCase()}">${s.category}</span>` : ""}</td>
+            <td class="mono">${s.branch || ""}</td></tr>`;
+        }).join("")}</table>`}
+    </div>
+
+    <h2>Head-to-head outcomes</h2>
+    <div class="panel">
+      ${Object.keys(pairs).length === 0 ? `<span class="muted">No jury votes recorded for round ${r}.</span>` :
+      `<table><tr><th>Pairing</th><th>A</th><th>B</th><th>Winner</th></tr>${
+        Object.values(pairs).map(p => {
+          const winner = p.aVotes === p.bVotes ? null : (p.aVotes > p.bVotes ? p.a : p.b);
+          return `<tr class="${winner ? "win" : ""}"><td>Round ${r}</td><td>${p.aVotes}</td><td>${p.bVotes}</td>
+            <td><b>${winner ? compLabel(winner) : "tie — organizer referees"}</b></td></tr>`;
+        }).join("")}</table>`}
+    </div>
+
+    <h2>Power rankings — cumulative through round ${maxRoundSeen}</h2>
+    <div class="panel">
+      <table><tr><th>#</th><th>Competitor</th><th>Total</th><th>Δ last round</th><th>Trajectory</th></tr>
+      ${ranked.map((p, i) => {
+        const d = p.total - p.prev;
+        const hist = cum[p.n].map(v => `<span class="mono">${v}</span>`).join(" → ");
+        return `<tr class="${i === 0 ? "win" : ""}"><td><b>${i + 1}</b></td><td>${compLabel(p.n)}</td>
+          <td class="score-big">${p.total}</td>
+          <td style="color:${d > 0 ? "var(--good)" : d < 0 ? "var(--bad)" : "var(--mut)"}">${d > 0 ? "+" + d : d}</td>
+          <td class="muted">${hist}</td></tr>`;
+      }).join("")}</table>
+    </div>`;
+}
+render();
+</script>
+</body>
+</html>

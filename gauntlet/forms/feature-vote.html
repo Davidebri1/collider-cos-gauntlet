@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="utf-8"><script src="gauntlet-data.js"></script></head>
+<body>
+<script>
+"use strict";
+const main = shell("Feature Vote", "Round opening — pick the feature everyone builds, and declare copy vs challenge (§5). One vote per competitor.");
+
+main.innerHTML = `
+  <div class="panel">
+    <div class="row">${selRound()}<div><label>Voter (kept anonymous in results)</label><select id="voter">${COMPETITORS.map(c => `<option value="${c.n}">${c.label}</option>`).join("")}</select></div></div>
+    <label>Feature (highest-voted feature is the round task)</label>
+    <select id="feature">${FEATURES.map(f => `<option value="${f.id}">${f.id} — ${f.name} [figma ${f.figma}]</option>`).join("")}</select>
+    <div class="row">
+      <div><label>Declared intent (anonymous)</label><select id="intent"><option value="challenge">Challenge — beat the design</option><option value="copy">Copy — match the design</option></select></div>
+    </div>
+    <label>Reasoning (optional but graded if you provide it)</label>
+    <textarea id="why" placeholder="Why this feature, why this intent. Logical chains score; conjecture costs."></textarea>
+    <div style="margin-top:12px"><button id="save">Cast Vote</button></div>
+  </div>
+  <h2>Votes this round</h2>
+  <div class="panel" id="tally"></div>
+  <div style="display:flex;gap:8px"><button class="ghost" id="expall">Export round feature-votes JSON</button></div>
+`;
+
+function renderTally() {
+  const r = getRound();
+  const votes = allEntries(`g:r${r}:fv:`);
+  const counts = {};
+  votes.forEach(v => { counts[v.featureId] = (counts[v.featureId] || 0) + 1; });
+  const sorted = Object.entries(counts).sort((a, b) => b[1] - a[1]);
+  const winner = sorted[0];
+  document.getElementById("tally").innerHTML = votes.length === 0
+    ? `<span class="muted">No votes yet for round ${r}.</span>`
+    : `<table><tr><th>Feature</th><th>Votes</th><th>Lead</th></tr>${
+        sorted.map(([fid, c]) => `<tr class="${winner && fid === winner[0] ? "win" : ""}"><td>${fid} — ${featName(fid)}</td><td>${c}</td><td>${winner && fid === winner[0] ? "ROUND TASK" : ""}</td></tr>`).join("")
+      }</table>`;
+}
+
+document.getElementById("save").onclick = () => {
+  const r = getRound(), voter = Number(document.getElementById("voter").value);
+  saveEntry(r, "fv", voter, {
+    round: r, voter, featureId: document.getElementById("feature").value,
+    intent: document.getElementById("intent").value,
+    why: document.getElementById("why").value.trim(), ts: Date.now(),
+  });
+  renderTally();
+};
+document.getElementById("round").onchange = renderTally;
+document.getElementById("expall").onclick = () => {
+  const r = getRound();
+  downloadJSON({ round: r, kind: "featureVotes", entries: allEntries(`g:r${r}:fv:`) }, `round-${r}-feature-votes.json`);
+};
+renderTally();
+</script>
+</body>
+</html>
