@@ -28,6 +28,28 @@ gauntlet/
 └── results/                   ← exported JSON per round (committed as the record)
 ```
 
+## Reference images — the physical reference
+
+Figma links are dead. The surviving references are committed here:
+
+| Path | What |
+|---|---|
+| `reference/per-row/` | **one canonical image per reference-map row** (rows 01–27) — use this |
+| `reference/ROW-REFERENCE.md` | row → feature → Figma node → code location → image table |
+| `reference/row-images/` | the 27 images embedded in the reference-map PDF (exact row order, some low-res) |
+| `figma-reference-map.pdf` | the original map — 27 embedded previews + the full requirements text |
+
+Full asset library (~4.4 GB: component PNGs, HTML mocks, `.fig` files, code exports, art-pack
+zips from every Figma/visionOS/Collider source across Documents and both Google Drive accounts):
+
+- `C:\Users\D\Documents\Collider Figma Consolidated\`
+- `P:\My Drive\Collider Figma Consolidated\`
+
+Open `index.html` in either for a visual gallery, `INDEX.md` for the full file manifest.
+
+Rows flagged in the map as **IGNORE** (2, 3, 5, 9, 11, 14, 16, 27) and **SKIPPED** (12) carry the
+marker in their filename — they stay in the set for context but are not competition targets.
+
 ## Branches
 
 | Branch | Purpose |
